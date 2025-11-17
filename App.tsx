@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { LanguageOption } from './types';
 import { LANGUAGES } from './constants';
@@ -9,8 +9,10 @@ import { ResultDisplay } from './components/ResultDisplay';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { OutputFormatSelector } from './components/OutputFormatSelector';
 import { AdvancedOptions } from './components/AdvancedOptions';
+import { ApiKeyInput } from './components/ApiKeyInput';
 
 const App: React.FC = () => {
+  const [apiKey, setApiKey] = useState<string>('');
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [sourceContent, setSourceContent] = useState<string>('');
   const [sourceLang, setSourceLang] = useState<LanguageOption>(LANGUAGES[1]); // Default English
@@ -26,6 +28,18 @@ const App: React.FC = () => {
   const [risqueLevel, setRisqueLevel] = useState<'Suggestive' | 'Explicit' | 'Very Explicit'>('Explicit');
   const [keywordsToEmphasize, setKeywordsToEmphasize] = useState<string>('');
   const [keywordsToAvoid, setKeywordsToAvoid] = useState<string>('');
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+    }
+  }, []);
+
+  const handleApiKeyChange = (key: string) => {
+    setApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+  };
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -48,6 +62,10 @@ const App: React.FC = () => {
   };
 
   const handleTranslate = useCallback(async () => {
+    if (!apiKey) {
+      setError('Please enter your Gemini API key first.');
+      return;
+    }
     if (!sourceContent || !sourceLang || !targetLang) {
       setError('Please select a file and both source and target languages.');
       return;
@@ -58,7 +76,7 @@ const App: React.FC = () => {
     setTranslatedContent('');
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       
       const advancedInstructions = `
 **Translation Style Guide:**
@@ -104,14 +122,18 @@ const App: React.FC = () => {
     } catch (err) {
       console.error(err);
       if (err instanceof Error) {
-        setError('An error occurred during translation. Please check the console for details.');
+        if (err.message.includes('API key not valid')) {
+            setError('Your API key is not valid. Please check and enter it again.');
+        } else {
+            setError('An error occurred during translation. Please check the console for details.');
+        }
       } else {
         setError('An unknown error occurred during translation.');
       }
     } finally {
       setIsLoading(false);
     }
-  }, [sourceContent, sourceLang, targetLang, liveliness, emotionality, risqueLevel, keywordsToEmphasize, keywordsToAvoid]);
+  }, [apiKey, sourceContent, sourceLang, targetLang, liveliness, emotionality, risqueLevel, keywordsToEmphasize, keywordsToAvoid]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-4 sm:p-6 md:p-8">
@@ -126,6 +148,8 @@ const App: React.FC = () => {
         </header>
 
         <main className="bg-gray-800/50 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-2xl border border-gray-700 space-y-8">
+          <ApiKeyInput apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
             <FileUpload onFileChange={handleFileChange} />
             <div className="flex flex-col sm:flex-row md:flex-col col-span-1 md:col-span-2 gap-4 items-center justify-center">
@@ -161,7 +185,7 @@ const App: React.FC = () => {
           <div className="text-center">
             <button
               onClick={handleTranslate}
-              disabled={!sourceFile || isLoading}
+              disabled={!sourceFile || isLoading || !apiKey}
               className="w-full md:w-1/2 px-8 py-4 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-300 ease-in-out transform hover:scale-105 disabled:scale-100 flex items-center justify-center"
             >
               {isLoading ? <LoadingSpinner /> : 'Translate Subtitles'}
