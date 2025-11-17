@@ -92,7 +92,7 @@ const App: React.FC = () => {
       `;
 
       const responseStream = await ai.models.generateContentStream({
-        model: 'gemini-2.5-pro',
+        model: 'gemini-2.5-flash',
         contents: prompt,
       });
 
