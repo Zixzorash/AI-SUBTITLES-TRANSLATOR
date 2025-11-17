@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { LanguageOption } from './types';
@@ -9,7 +10,54 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { OutputFormatSelector } from './components/OutputFormatSelector';
 import { AdvancedOptions } from './components/AdvancedOptions';
 
+// @ts-ignore - aistudio is a global
+declare const window: { aistudio: any; } & Window;
+
+const ApiKeySelector: React.FC<{ onKeySelect: () => void }> = ({ onKeySelect }) => {
+  const handleSelectKey = async () => {
+    try {
+      await window.aistudio.openSelectKey();
+      // Optimistically assume key is selected to avoid race condition.
+      onKeySelect();
+    } catch(e) {
+      console.error("Could not open API key selector", e);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md mx-auto bg-gray-800/50 backdrop-blur-sm p-8 rounded-2xl shadow-2xl border border-gray-700 text-center">
+        <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 mb-4">
+          API Key Required
+        </h2>
+        <p className="text-gray-400 mb-6">
+          Please select a Google AI API key to use this application. Your API key is used to authenticate your requests.
+        </p>
+        <button
+          onClick={handleSelectKey}
+          className="w-full px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-all duration-300 ease-in-out transform hover:scale-105"
+        >
+          Select API Key
+        </button>
+        <p className="text-xs text-gray-500 mt-4">
+          For more information on billing, please visit the{' '}
+          <a
+            href="https://ai.google.dev/gemini-api/docs/billing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-purple-400 hover:underline"
+          >
+            billing documentation
+          </a>.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [sourceContent, setSourceContent] = useState<string>('');
   const [sourceLang, setSourceLang] = useState<LanguageOption>(LANGUAGES[1]); // Default English
@@ -25,6 +73,19 @@ const App: React.FC = () => {
   const [risqueLevel, setRisqueLevel] = useState<'Suggestive' | 'Explicit' | 'Very Explicit'>('Explicit');
   const [keywordsToEmphasize, setKeywordsToEmphasize] = useState<string>('');
   const [keywordsToAvoid, setKeywordsToAvoid] = useState<string>('');
+
+  useEffect(() => {
+    const checkApiKey = async () => {
+      try {
+        const keySelected = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(keySelected);
+      } catch (e) {
+        console.error("Could not check for API key", e);
+        setHasApiKey(false); // Default to false if check fails
+      }
+    };
+    checkApiKey();
+  }, []);
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -102,15 +163,35 @@ const App: React.FC = () => {
       
     } catch (err) {
       console.error(err);
-      if (err instanceof Error && (err.message.includes('API key not valid') || err.message.includes('API_KEY_INVALID'))) {
-        setError('The provided API Key is invalid. Please check the environment configuration.');
+      if (err instanceof Error) {
+        if (err.message.includes('API key not valid') || err.message.includes('API_KEY_INVALID')) {
+            setError('The provided API Key is invalid. Please check your selection.');
+            setHasApiKey(false);
+        } else if (err.message.includes('Requested entity was not found')) {
+            setError('API Key error. Please select a valid API key to continue.');
+            setHasApiKey(false);
+        } else {
+            setError('An error occurred during translation. Please check the console for details.');
+        }
       } else {
-        setError('An error occurred during translation. Please check the console for details.');
+        setError('An unknown error occurred during translation.');
       }
     } finally {
       setIsLoading(false);
     }
   }, [sourceContent, sourceLang, targetLang, liveliness, emotionality, risqueLevel, keywordsToEmphasize, keywordsToAvoid]);
+
+  if (hasApiKey === null) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400"></div>
+      </div>
+    );
+  }
+
+  if (!hasApiKey) {
+    return <ApiKeySelector onKeySelect={() => setHasApiKey(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-4 sm:p-6 md:p-8">
