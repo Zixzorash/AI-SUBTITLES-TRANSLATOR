@@ -19,46 +19,12 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [outputFormat, setOutputFormat] = useState<'vtt' | 'srt' | 'txt'>('vtt');
 
-  // API Key State
-  const [apiKey, setApiKey] = useState<string>('');
-  const [apiKeyInput, setApiKeyInput] = useState<string>('');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [isKeySaved, setIsKeySaved] = useState(false);
-
-
   // Advanced Options State
   const [liveliness, setLiveliness] = useState<'Subtle' | 'Natural' | 'Vivid'>('Natural');
   const [emotionality, setEmotionality] = useState<'Subtle' | 'Expressive' | 'Intense'>('Expressive');
   const [risqueLevel, setRisqueLevel] = useState<'Suggestive' | 'Explicit' | 'Very Explicit'>('Explicit');
   const [keywordsToEmphasize, setKeywordsToEmphasize] = useState<string>('');
   const [keywordsToAvoid, setKeywordsToAvoid] = useState<string>('');
-
-  useEffect(() => {
-    const storedKey = localStorage.getItem('gemini_api_key');
-    if (storedKey) {
-      setApiKey(storedKey);
-      setApiKeyInput(storedKey);
-      setIsKeySaved(true);
-    }
-  }, []);
-
-  const handleSaveKey = () => {
-    if (!apiKeyInput.trim()) {
-        setError("API Key cannot be empty.");
-        return;
-    }
-    setError(null);
-    setApiKey(apiKeyInput);
-    localStorage.setItem('gemini_api_key', apiKeyInput);
-    setIsKeySaved(true);
-  };
-
-  const handleClearKey = () => {
-    setApiKey('');
-    setApiKeyInput('');
-    localStorage.removeItem('gemini_api_key');
-    setIsKeySaved(false);
-  };
 
   const handleFileChange = (file: File | null) => {
     if (file) {
@@ -85,18 +51,13 @@ const App: React.FC = () => {
       setError('Please select a file and both source and target languages.');
       return;
     }
-    
-    if (!apiKey) {
-      setError('API Key is missing. Please enter and save your API key above.');
-      return;
-    }
 
     setIsLoading(true);
     setError(null);
     setTranslatedContent('');
 
     try {
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const advancedInstructions = `
 **Translation Style Guide:**
@@ -142,15 +103,14 @@ const App: React.FC = () => {
     } catch (err) {
       console.error(err);
       if (err instanceof Error && (err.message.includes('API key not valid') || err.message.includes('API_KEY_INVALID'))) {
-        setError('Invalid API Key. Please check your key and save it again.');
-        setIsKeySaved(false);
+        setError('The provided API Key is invalid. Please check the environment configuration.');
       } else {
         setError('An error occurred during translation. Please check the console for details.');
       }
     } finally {
       setIsLoading(false);
     }
-  }, [sourceContent, sourceLang, targetLang, liveliness, emotionality, risqueLevel, keywordsToEmphasize, keywordsToAvoid, apiKey]);
+  }, [sourceContent, sourceLang, targetLang, liveliness, emotionality, risqueLevel, keywordsToEmphasize, keywordsToAvoid]);
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-4 sm:p-6 md:p-8">
@@ -163,36 +123,6 @@ const App: React.FC = () => {
             Translate subtitles with a touch of cinematic passion.
           </p>
         </header>
-
-        <section className="bg-gray-800/50 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-2xl border border-gray-700 space-y-4 mb-8">
-          <h2 className="text-xl font-semibold text-center text-gray-200">API Key Management</h2>
-          <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 px-4 py-3 rounded-lg text-sm">
-            <strong>Security Warning:</strong> Saving your API key in the browser's local storage is convenient for development but is not secure. Do not use this method in a production environment. Anyone with access to your browser could potentially view your key.
-          </div>
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="relative w-full">
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="Enter your Gemini API Key"
-                className="w-full p-3 pr-12 bg-gray-700 border border-gray-600 text-white text-md rounded-lg focus:ring-purple-500 focus:border-purple-500 block"
-              />
-              <button onClick={() => setShowApiKey(!showApiKey)} className="absolute inset-y-0 right-0 px-4 text-gray-400 hover:text-white">
-                {showApiKey ? <EyeOffIcon /> : <EyeIcon />}
-              </button>
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-                <button onClick={handleSaveKey} className="flex-1 sm:flex-none px-5 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300 transition-colors">
-                Save
-                </button>
-                <button onClick={handleClearKey} className="flex-1 sm:flex-none px-5 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 focus:outline-none focus:ring-4 focus:ring-gray-400 transition-colors">
-                Clear
-                </button>
-            </div>
-          </div>
-            {isKeySaved && <p className="text-green-400 text-center text-sm">API Key is saved and ready to use.</p>}
-        </section>
 
         <main className="bg-gray-800/50 backdrop-blur-sm p-6 sm:p-8 rounded-2xl shadow-2xl border border-gray-700 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
@@ -259,20 +189,6 @@ const App: React.FC = () => {
 const ArrowIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-500 md:rotate-0 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-    </svg>
-);
-
-const EyeIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-);
-
-const EyeOffIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 .525-1.666 1.489-3.168 2.683-4.333M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.583 17.584A9.953 9.953 0 0112 19c-4.478 0-8.268-2.943-9.542-7 .525-1.666 1.489-3.168 2.683-4.333m1.417-1.417A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a9.953 9.953 0 01-1.417 3.417m-3.417-3.417a3 3 0 01-4.242 0M21 21L3 3" />
     </svg>
 );
 
